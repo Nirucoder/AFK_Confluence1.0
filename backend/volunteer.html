@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Volunteer Verification</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f1f5f9;
+      padding: 40px;
+    }
+    .card {
+      max-width: 500px;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin: auto;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 12px;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    .status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="card">
+  <h2>Volunteer Verification</h2>
+  <p>Upload your DigiLocker document link for verification.</p>
+
+  <input id="doc" placeholder="Paste DigiLocker Document URL">
+
+  <button onclick="submitDoc()">Submit for Verification</button>
+
+  <p class="status" id="status"></p>
+</div>
+
+<script>
+/* 🔒 LOGIN CHECK */
+const loggedInUser = localStorage.getItem("loggedInUser");
+
+if (!loggedInUser) {
+  alert("Please login first to apply as a volunteer.");
+  window.location.href = "login.html";
+}
+
+/* 📄 EXISTING LOGIC */
+const statusEl = document.getElementById("status");
+const volunteer = JSON.parse(localStorage.getItem("volunteer"));
+
+if (volunteer) {
+  statusEl.innerText =
+    volunteer.status === "approved"
+      ? "✅ Approved! You are now a verified volunteer."
+      : "⏳ Waiting for admin approval.";
+}
+
+function submitDoc() {
+  const doc = document.getElementById("doc").value;
+
+  if (!doc) {
+    alert("Please paste DigiLocker document URL");
+    return;
+  }
+
+  const data = {
+    email: loggedInUser,
+    document: doc,
+    status: "pending"
+  };
+
+  localStorage.setItem("volunteer", JSON.stringify(data));
+  alert("Submitted! Please wait for admin approval.");
+  location.reload();
+}
+</script>
+
+
+</body>
+</html>

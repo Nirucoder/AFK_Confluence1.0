@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Logging out...</title>
+</head>
+<body>
+
+<p>Logging you out...</p>
+
+<script>
+  // Remove user login
+  localStorage.removeItem("loggedInUser");
+
+  // Remove admin login (safe even if not admin)
+  localStorage.removeItem("adminLoggedIn");
+
+  // Redirect to login page
+  window.location.href = "login.html";
+</script>
+
+</body>
+</html>

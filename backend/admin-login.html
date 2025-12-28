@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Login | Control Panel</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: #ffffff;
+      width: 360px;
+      padding: 35px;
+      border-radius: 14px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+      text-align: center;
+    }
+
+    .card h2 {
+      margin-bottom: 6px;
+      font-size: 24px;
+    }
+
+    .card p {
+      color: #64748b;
+      font-size: 14px;
+      margin-bottom: 25px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 15px;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 5px;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .hint {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="card">
+  <h2>Admin Access</h2>
+  <p>Restricted control panel</p>
+
+  <input id="username" placeholder="Admin username">
+  <input id="password" type="password" placeholder="Password">
+
+  <button onclick="adminLogin()">Login</button>
+
+  <div class="hint">
+    Authorized personnel only
+  </div>
+</div>
+
+<script>
+function adminLogin() {
+  if (
+    document.getElementById("username").value === "admin" &&
+    document.getElementById("password").value === "admin123"
+  ) {
+    localStorage.setItem("adminLoggedIn", "true");
+    window.location.href = "admin.html";
+  } else {
+    alert("Invalid admin credentials");
+  }
+}
+</script>
+
+</body>
+</html>
