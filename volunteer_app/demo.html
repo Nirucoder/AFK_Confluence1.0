@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volunteer App - Navigation Mode</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* CSS Reset & Base Styles */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            /* Slate 900 */
+            color: #f8fafc;
+            /* Slate 50 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #root {
+            display: flex;
+            height: 100%;
+            width: 100%;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* HEADER */
+        .hud-header {
+            background: #1e293b;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            z-index: 50;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            height: 60px;
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }
+
+        .header-hidden {
+            transform: translateY(-100%);
+        }
+
+        .app-logo {
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: -1px;
+        }
+
+        .app-logo span {
+            color: #22d3ee;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .status-offline {
+            background: #64748b;
+            color: white;
+        }
+
+        .status-online {
+            background: #22c55e;
+            color: white;
+            box-shadow: 0 0 10px #22c55e;
+        }
+
+        /* ACTION BAR (Bottom) */
+        .action-bar {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: 90%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .action-hidden {
+            transform: translate(-50%, 200%);
+        }
+
+        .btn-main {
+            width: 100%;
+            padding: 18px;
+            border: none;
+            border-radius: 16px;
+            font-size: 18px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            text-transform: uppercase;
+            outline: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-online {
+            background: #22c55e;
+            color: white;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+
+        .btn-scanning {
+            background: rgba(30, 41, 59, 0.9);
+            color: #94a3b8;
+            border: 1px solid #475569;
+            backdrop-filter: blur(8px);
+        }
+
+        /* NAVIGATION HUD (En Route Mode) */
+        .nav-overlay-top {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .nav-card {
+            background: #064e3b;
+            /* Dark Green */
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            animation: slideDown 0.3s;
+        }
+
+        .turn-icon {
+            font-size: 32px;
+        }
+
+        .nav-instruction {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .nav-sub {
+            font-size: 14px;
+            opacity: 0.8;
+            font-weight: 400;
+        }
+
+        .nav-overlay-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #1e293b;
+            padding: 24px;
+            border-top: 1px solid #334155;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideUp 0.3s;
+        }
+
+        .eta-block {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .eta-time {
+            font-size: 28px;
+            font-weight: 800;
+            color: #22c55e;
+        }
+
+        .eta-dist {
+            font-size: 14px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .btn-cancel {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+            }
+
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        /* INCOMING REQUEST MODAL */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-card {
+            background: #1e293b;
+            padding: 32px;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid #475569;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        .timer-ring {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid #334155;
+            border-top-color: #f59e0b;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .modal-title {
+            color: #f59e0b;
+            font-size: 13px;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+            font-weight: 800;
+        }
+
+        .incident-name {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: white;
+            line-height: 1.1;
+        }
+
+        .incident-loc {
+            color: #94a3b8;
+            font-size: 16px;
+            margin-bottom: 32px;
+            font-weight: 500;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 16px;
+        }
+
+        .btn-accept {
+            flex: 1;
+            background: #22c55e;
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-decline {
+            flex: 1;
+            background: #334155;
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .map-wrapper {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        #leaflet-map {
+            width: 100%;
+            height: 100%;
+            background: #020617;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const icon = window.lucide ? window.lucide.icons : {};
+
+        // Connaught Place -> Chandni Chowk
+        const VOLUNTEER_HOME = [28.6304, 77.2177];
+        const INCIDENT_LOC = [28.6506, 77.2303];
+
+        // Helper: Calculate distance in KM
+        const getDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 6371; // Radius of the earth in km
+            const dLat = (lat2 - lat1) * (Math.PI / 180);
+            const dLon = (lon2 - lon1) * (Math.PI / 180);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
+        };
+
+        const VolunteerMap = ({ myLocation, incident, status }) => {
+            const mapInstance = useRef(null);
+            const layersRef = useRef(L.layerGroup());
+            const markerRef = useRef(null);
+
+            useEffect(() => {
+                const container = document.getElementById('leaflet-map');
+                if (!container || mapInstance.current) return;
+
+                const map = L.map(container, {
+                    zoomControl: false,
+                    attributionControl: false
+                }).setView(VOLUNTEER_HOME, 15);
+
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 20
+                }).addTo(map);
+
+                layersRef.current.addTo(map);
+                mapInstance.current = map;
+            }, []);
+
+            useEffect(() => {
+                if (!mapInstance.current) return;
+                const layers = layersRef.current;
+                const map = mapInstance.current;
+
+                layers.clearLayers();
+
+                // 1. Draw Route Line if En Route
+                if (status === 'EN_ROUTE' && incident) {
+                    L.polyline([myLocation, incident.coords], {
+                        color: '#22d3ee',
+                        weight: 6,
+                        opacity: 0.7,
+                        lineCap: 'round'
+                    }).addTo(layers);
+                }
+
+                // 2. Draw ME
+                // If navigation mode, use a "GPS Arrow" style
+                const meRadius = status === 'EN_ROUTE' ? 8 : 12;
+                const meColor = status === 'EN_ROUTE' ? '#fff' : '#22d3ee';
+                const meStroke = status === 'EN_ROUTE' ? '#22d3ee' : '#fff';
+
+                L.circleMarker(myLocation, {
+                    radius: meRadius,
+                    fillColor: meColor,
+                    color: meStroke,
+                    weight: 4,
+                    opacity: 1,
+                    fillOpacity: 1
+                }).bindPopup("<b>You</b>").addTo(layers);
+
+                // 3. Draw Incident
+                if (incident) {
+                    L.circleMarker(incident.coords, {
+                        radius: 14,
+                        fillColor: '#ef4444',
+                        color: '#ffffff',
+                        weight: 4,
+                        opacity: 1,
+                        fillOpacity: 1
+                    }).addTo(layers);
+                }
+
+                // CAMERA LOGIC
+                if (status === 'EN_ROUTE') {
+                    // Navigation Zoom
+                    map.setView(myLocation, 17, { animate: true, duration: 0.5 });
+                } else if (incident && status === 'PENDING') {
+                    const bounds = L.latLngBounds([myLocation, incident.coords]);
+                    map.fitBounds(bounds, { padding: [80, 80], animate: true });
+                }
+
+            }, [myLocation, incident, status]);
+
+            return <div className="map-wrapper"><div id="leaflet-map"></div></div>;
+        };
+
+        const App = () => {
+            const [status, setStatus] = useState('OFFLINE');
+            const [myLocation, setMyLocation] = useState(VOLUNTEER_HOME);
+            const [activeIncident, setActiveIncident] = useState(null);
+
+            // Navigation Stats
+            const [distanceKm, setDistanceKm] = useState(0);
+            const [etaMins, setEtaMins] = useState(0);
+
+            // Movement Logic
+            useEffect(() => {
+                let interval;
+                if (status === 'EN_ROUTE' && activeIncident) {
+                    const speedKmh = 60; // Simulated speed
+                    const speedMps = (speedKmh * 1000) / 3600; // Meters per second
+
+                    interval = setInterval(() => {
+                        setMyLocation(prev => {
+                            const [curLat, curLng] = prev;
+                            const [targetLat, targetLng] = activeIncident.coords;
+
+                            // Calc Distance
+                            const distKm = getDistance(curLat, curLng, targetLat, targetLng);
+                            setDistanceKm(distKm.toFixed(1));
+                            setEtaMins(Math.ceil((distKm / speedKmh) * 60));
+
+                            // Move Logic
+                            const dLat = targetLat - curLat;
+                            const dLng = targetLng - curLng;
+                            const euclDist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+                            if (euclDist < 0.0002) {
+                                setStatus('ON_SCENE');
+                                return activeIncident.coords;
+                            }
+
+                            // Move 2% of remaining distance to create "easing" effect
+                            // or linear speed
+                            const step = 0.02;
+                            return [curLat + dLat * step, curLng + dLng * step];
+                        });
+                    }, 500); // Update every 500ms
+                }
+                return () => clearInterval(interval);
+            }, [status, activeIncident]);
+
+            const goOnline = () => {
+                setStatus('ONLINE');
+                setTimeout(() => {
+                    setStatus('PENDING');
+                    setActiveIncident({
+                        title: 'Fire at Chandni Chowk',
+                        address: 'Town Hall Rd, Old Delhi',
+                        coords: INCIDENT_LOC
+                    });
+                }, 2000);
+            };
+
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+                    {/* Top HUD (Hidden in Nav Mode) */}
+                    <div className={`hud-header ${status === 'EN_ROUTE' ? 'header-hidden' : ''}`}>
+                        <div className="app-logo">RESP<span>ODR</span></div>
+                        <div className={`status-badge ${status === 'OFFLINE' ? 'status-offline' : 'status-online'}`}>
+                            {status.replace('_', ' ')}
+                        </div>
+                    </div>
+
+                    {/* Navigation Overlay (Top) */}
+                    {status === 'EN_ROUTE' && (
+                        <div className="nav-overlay-top">
+                            <div className="nav-card">
+                                <div className="turn-icon">↱</div> {/* Simple arrow char */}
+                                <div>
+                                    <div className="nav-instruction">Turn Right</div>
+                                    <div className="nav-sub">onto Chandni Chowk Rd</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <VolunteerMap
+                        myLocation={myLocation}
+                        incident={activeIncident}
+                        status={status}
+                    />
+
+                    {/* Navigation Footer (Bottom) */}
+                    {status === 'EN_ROUTE' && (
+                        <div className="nav-overlay-bottom">
+                            <div className="eta-block">
+                                <span className="eta-time">{etaMins} min</span>
+                                <span className="eta-dist">{distanceKm} km • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <button className="btn-cancel" onClick={() => setStatus('ONLINE')}>EXIT</button>
+                        </div>
+                    )}
+
+                    {/* Action Bar (Offline/Online) */}
+                    <div className={`action-bar ${status === 'EN_ROUTE' || status === 'ON_SCENE' ? 'action-hidden' : ''}`}>
+                        {status === 'OFFLINE' && (
+                            <button className="btn-main btn-online" onClick={goOnline}>
+                                GO ONLINE
+                            </button>
+                        )}
+                        {status === 'ONLINE' && (
+                            <button className="btn-main btn-scanning">
+                                Scanning for incidents...
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Arrived Overlay */}
+                    {status === 'ON_SCENE' && (
+                        <div className="nav-overlay-bottom" style={{ justifyContent: 'center', background: '#22c55e' }}>
+                            <div style={{ fontSize: '24px', fontWeight: '800', color: 'white' }}>
+                                ARRIVED AT SCENE
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pending Request Modal */}
+                    {status === 'PENDING' && (
+                        <div className="modal-overlay">
+                            <div className="modal-card">
+                                <div className="timer-ring"></div>
+                                <div className="modal-title">HIGH PRIORITY REQUEST</div>
+                                <div className="incident-name">{activeIncident.title}</div>
+                                <div className="incident-loc">{activeIncident.address}</div>
+                                <div className="btn-group">
+                                    <button className="btn-decline" onClick={() => setStatus('ONLINE')}>DECLINE</button>
+                                    <button className="btn-accept" onClick={() => setStatus('EN_ROUTE')}>ACCEPT</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
