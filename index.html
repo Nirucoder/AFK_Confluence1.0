@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Emergency Response Command Center</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        warbg: '#f5f5f5',                 // light background
+                        warpanel: 'rgba(255,255,255,0.9)',
+                        warglass: 'rgba(255,255,255,0.85)',
+                        waraccent: '#f97316',             // orange
+                        warcritical: '#dc2626',           // red
+                    },
+                    boxShadow: {
+                        neon: '0 0 18px rgba(249,115,22,0.4)',
+                        neonRed: '0 0 18px rgba(220,38,38,0.5)',
+                    },
+                },
+            },
+        };
+    </script>
+
+    <!-- Leaflet (Free map, no token needed) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <!-- React + ReactDOM + Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Framer Motion UMD -->
+    <script src="https://unpkg.com/framer-motion/dist/framer-motion.umd.js"></script>
+
+    <!-- socket.io-client (conceptual) -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
+
+    <!-- Lucide icons for React (global LucideReact) -->
+    <script src="https://unpkg.com/lucide-react@0.460.0/dist/lucide-react.umd.js"></script>
+
+    <style>
+        body {
+            background: radial-gradient(circle at 10% 20%, #fff7ed 0, #f5f5f5 40%, #e5e7eb 100%);
+        }
+
+        .glass-panel {
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .scroll-thin::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .scroll-thin::-webkit-scrollbar-thumb {
+            background-color: #d4d4d8;
+            border-radius: 999px;
+        }
+    </style>
+</head>
+
+<body class="h-full text-slate-900">
+    <div id="root" class="h-screen"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion } = window['framer-motion'] || {};
+        const Lucide = window.LucideReact || {};
+        const {
+            Map: MapIcon = () => null,
+            ShieldAlert = () => null,
+            Users = () => null,
+            Battery = () => null,
+            Radio = () => null,
+        } = Lucide;
+
+        // ---- Mock Data (India) ----
+        // Key cities: Delhi, Mumbai, Bengaluru, Kolkata
+        const INCIDENTS = [
+            {
+                id: 'INC-001',
+                title: 'Bridge Collapse - Delhi Ring Road',
+                severity: 5,
+                coords: { lat: 28.6139, lng: 77.2090 }, // Delhi
+                requiredSkills: ['Rescue', 'Medical'],
+            },
+            {
+                id: 'INC-002',
+                title: 'Chemical Leak - Mumbai Dockyard',
+                severity: 4,
+                coords: { lat: 19.0760, lng: 72.8777 }, // Mumbai
+                requiredSkills: ['Hazmat', 'Logistics'],
+            },
+            {
+                id: 'INC-003',
+                title: 'Wildfire Perimeter Breach - Western Ghats',
+                severity: 5,
+                coords: { lat: 12.9716, lng: 77.5946 }, // Bengaluru
+                requiredSkills: ['Rescue', 'Logistics'],
+            },
+            {
+                id: 'INC-004',
+                title: 'Mass Casualty - Kolkata Stadium',
+                severity: 3,
+                coords: { lat: 22.5726, lng: 88.3639 }, // Kolkata
+                requiredSkills: ['Medical'],
+            },
+        ];
+
+        const VOLUNTEERS_INITIAL = [
+            {
+                id: 'VOL-001',
+                name: 'NDRF Unit Alpha',
+                type: 'Skilled',
+                coords: { lat: 28.65, lng: 77.18 }, // near Delhi
+                battery: 82,
+                skills: ['Medical', 'Rescue'],
+            },
+            {
+                id: 'VOL-002',
+                name: 'Civic Squad Mumbai',
+                type: 'Civic',
+                coords: { lat: 19.09, lng: 72.88 }, // near Mumbai
+                battery: 45,
+                skills: ['Logistics'],
+            },
+            {
+                id: 'VOL-003',
+                name: 'Critical Response Bengaluru',
+                type: 'Critical',
+                coords: { lat: 12.98, lng: 77.60 }, // near Bengaluru
+                battery: 18,
+                skills: ['Rescue', 'Hazmat'],
+            },
+            {
+                id: 'VOL-004',
+                name: 'Medic Cell Kolkata',
+                type: 'Skilled',
+                coords: { lat: 22.58, lng: 88.37 }, // near Kolkata
+                battery: 63,
+                skills: ['Medical'],
+            },
+            {
+                id: 'VOL-005',
+                name: 'Civic Line Nagpur',
+                type: 'Civic',
+                coords: { lat: 21.15, lng: 79.09 }, // central India
+                battery: 96,
+                skills: ['Logistics', 'Rescue'],
+            },
+        ];
+
+        // Restricted zone near Delhi
+        const RESTRICTED_ZONES = {
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: { id: 'GF-DELHI-1' },
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [
+                            [
+                                [77.15, 28.70],
+                                [77.25, 28.70],
+                                [77.25, 28.60],
+                                [77.15, 28.60],
+                                [77.15, 28.70],
+                            ],
+                        ],
+                    },
+                },
+            ],
+        };
+
+        // ---- Utilities ----
+        function haversineDistanceKm(a, b) {
+            const R = 6371;
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const dLat = toRad(b.lat - a.lat);
+            const dLon = toRad(b.lng - a.lng);
+            const lat1 = toRad(a.lat);
+            const lat2 = toRad(b.lat);
+            const sinDLat = Math.sin(dLat / 2);
+            const sinDLon = Math.sin(dLon / 2);
+
+            const h =
+                sinDLat * sinDLat +
+                Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+
+            const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+            return R * c;
+        }
+
+        const SKILL_OPTIONS = ['Medical', 'Rescue', 'Logistics', 'Hazmat'];
+
+        // ---- Components ----
+
+        function MetricCard({ label, value, accentClass, icon: Icon }) {
+            const Content = (
+                <div
+                    className={
+                        'glass-panel border rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm ' +
+                        accentClass
+                    }
+                >
+                    {Icon && (
+                        <div className="p-2 rounded-lg bg-orange-50 text-orange-600">
+                            <Icon size={18} />
+                        </div>
+                    )}
+                    <div className="flex-1">
+                        <div className="text-xs uppercase tracking-wide text-slate-500">
+                            {label}
+                        </div>
+                        <div className="text-lg font-semibold">{value}</div>
+                    </div>
+                </div>
+            );
+
+            if (motion) {
+                return (
+                    <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4 }}
+                    >
+                        {Content}
+                    </motion.div>
+                );
+            }
+            return Content;
+        }
+
+        function BatteryBar({ percent }) {
+            const color =
+                percent < 20
+                    ? 'bg-warcritical'
+                    : percent < 50
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-500';
+
+            return (
+                <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="flex items-center gap-1 text-slate-500">
+                            <Battery size={12} /> Battery
+                        </span>
+                        <span className="font-mono">{percent.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                            className={color + ' h-full transition-all duration-300'}
+                            style={{ width: `${percent}%` }}
+                        />
+                    </div>
+                </div>
+            );
+        }
+
+        function OfflineCacheStatus() {
+            const tiles = [
+                { id: 'Delhi NCR', status: 'Cached', color: 'text-emerald-600' },
+                { id: 'Mumbai Metro', status: 'Cached', color: 'text-emerald-600' },
+                { id: 'Bengaluru Sector', status: 'Streaming', color: 'text-amber-500' },
+            ];
+            return (
+                <div className="glass-panel border border-orange-100 rounded-xl px-3 py-2 text-xs text-slate-700 bg-white/80">
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[0.65rem] uppercase tracking-wide text-slate-500">
+                            Offline Cache
+                        </span>
+                        <span className="text-[0.6rem] text-slate-500">
+                            Tiles: {tiles.length}
+                        </span>
+                    </div>
+                    <div className="space-y-1">
+                        {tiles.map((t) => (
+                            <div
+                                key={t.id}
+                                className="flex items-center justify-between text-[0.7rem]"
+                            >
+                                <span className="truncate">{t.id}</span>
+                                <span className={t.color}>{t.status}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function SkillFilter({ activeSkill, onChange }) {
+            return (
+                <div className="flex flex-wrap gap-2 text-xs">
+                    <button
+                        onClick={() => onChange(null)}
+                        className={
+                            'px-3 py-1 rounded-full border transition ' +
+                            (activeSkill === null
+                                ? 'bg-waraccent text-white border-waraccent shadow-neon'
+                                : 'bg-white/90 text-slate-700 border-slate-300 hover:border-waraccent/60')
+                        }
+                    >
+                        All Skills
+                    </button>
+                    {SKILL_OPTIONS.map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => onChange(activeSkill === s ? null : s)}
+                            className={
+                                'px-3 py-1 rounded-full border transition ' +
+                                (activeSkill === s
+                                    ? 'bg-waraccent text-white border-waraccent shadow-neon'
+                                    : 'bg-white/90 text-slate-700 border-slate-300 hover:border-waraccent/60')
+                            }
+                        >
+                            {s}
+                        </button>
+                    ))}
+                </div>
+            );
+        }
+
+        function IncidentCard({ incident, selected, onClick }) {
+            const severityColor =
+                incident.severity >= 5
+                    ? 'bg-warcritical/10 text-warcritical border-warcritical/70 shadow-neonRed'
+                    : incident.severity >= 4
+                        ? 'bg-amber-50 text-amber-600 border-amber-300'
+                        : 'bg-emerald-50 text-emerald-600 border-emerald-300';
+
+            return (
+                <button
+                    onClick={onClick}
+                    className={
+                        'w-full text-left rounded-xl border px-3 py-3 mb-3 glass-panel bg-white/80 transition hover:border-waraccent/70 hover:shadow-neon ' +
+                        (selected
+                            ? 'border-waraccent shadow-neon'
+                            : 'border-slate-200')
+                    }
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[0.7rem] uppercase tracking-wide text-slate-500">
+                            {incident.id}
+                        </span>
+                        <span
+                            className={
+                                'text-[0.65rem] px-2 py-0.5 rounded-full border ' +
+                                severityColor
+                            }
+                        >
+                            Sev {incident.severity}
+                        </span>
+                    </div>
+                    <div className="text-sm font-semibold mb-1 text-slate-900">
+                        {incident.title}
+                    </div>
+                    <div className="text-[0.7rem] text-slate-500 mb-1">
+                        {incident.coords.lat.toFixed(3)}, {incident.coords.lng.toFixed(3)}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {incident.requiredSkills.map((s) => (
+                            <span
+                                key={s}
+                                className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700"
+                            >
+                                {s}
+                            </span>
+                        ))}
+                    </div>
+                </button>
+            );
+        }
+
+        function SupplyDemandTicker() {
+            const canvasRef = useRef(null);
+            const chartRef = useRef(null);
+
+            useEffect(() => {
+                if (!canvasRef.current || !window.Chart) return;
+
+                const now = Date.now();
+                const labels = [];
+                const supplyData = [];
+                const demandData = [];
+                for (let i = 6; i >= 0; i--) {
+                    const t = new Date(now - i * 60 * 60 * 1000);
+                    labels.push(
+                        t.getHours().toString().padStart(2, '0') +
+                        ':' +
+                        t.getMinutes().toString().padStart(2, '0')
+                    );
+                    const base = 40 + Math.random() * 30;
+                    supplyData.push(Math.round(base + Math.random() * 10));
+                    demandData.push(Math.round(base + (Math.random() - 0.3) * 20));
+                }
+
+                const ctx = canvasRef.current.getContext('2d');
+                chartRef.current = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Supply',
+                                data: supplyData,
+                                borderColor: '#22c55e',
+                                backgroundColor: 'rgba(34,197,94,0.15)',
+                                tension: 0.35,
+                                fill: true,
+                            },
+                            {
+                                label: 'Demand',
+                                data: demandData,
+                                borderColor: '#f97316',
+                                backgroundColor: 'rgba(249,115,22,0.12)',
+                                tension: 0.35,
+                                fill: true,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#4b5563',
+                                    boxWidth: 8,
+                                },
+                            },
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#6b7280',
+                                    maxRotation: 0,
+                                },
+                                grid: {
+                                    color: 'rgba(209,213,219,0.6)',
+                                },
+                            },
+                            y: {
+                                ticks: { color: '#6b7280' },
+                                grid: { color: 'rgba(229,231,235,0.8)' },
+                            },
+                        },
+                    },
+                });
+
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                        chartRef.current = null;
+                    }
+                };
+            }, []);
+
+            return (
+                <div className="glass-panel border border-orange-100 rounded-xl px-3 py-2 bg-white/90">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-700">
+                            <Radio size={14} className="text-waraccent" />
+                            <span>Supply vs Demand (6h)</span>
+                        </div>
+                        <span className="text-[0.6rem] text-slate-500">
+                            Live Ticker
+                        </span>
+                    </div>
+                    <canvas ref={canvasRef} height="80"></canvas>
+                </div>
+            );
+        }
+
+        function GeoSkillMatchPanel({
+            selectedIncident,
+            volunteers,
+            activeSkill,
+            onVolunteerSelect,
+            selectedVolunteer,
+        }) {
+            if (!selectedIncident) {
+                return (
+                    <div className="text-sm text-slate-500 h-full flex items-center justify-center text-center px-4">
+                        Select an incident on the left to compute geo-skill matches.
+                    </div>
+                );
+            }
+
+            let filtered = volunteers.slice();
+            if (activeSkill) {
+                filtered = filtered.filter((v) => v.skills.includes(activeSkill));
+            }
+
+            filtered = filtered.filter((v) =>
+                selectedIncident.requiredSkills.some((r) => v.skills.includes(r))
+            );
+
+            const withDistance = filtered.map((v) => ({
+                ...v,
+                distanceKm: haversineDistanceKm(selectedIncident.coords, v.coords),
+            }));
+            withDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+
+            const top = withDistance.slice(0, 5);
+
+            return (
+                <div className="h-full flex flex-col">
+                    <div className="mb-2 text-xs text-slate-500">
+                        Geo-Skill Match • Incident{' '}
+                        <span className="text-slate-800 font-semibold">
+                            {selectedIncident.id}
+                        </span>
+                    </div>
+                    <div className="space-y-2 flex-1 overflow-y-auto scroll-thin pr-1">
+                        {top.length === 0 && (
+                            <div className="text-xs text-slate-500">
+                                No matching volunteers for required skillset.
+                            </div>
+                        )}
+                        {top.map((v) => {
+                            const badgeColor =
+                                v.type === 'Critical'
+                                    ? 'bg-warcritical/10 text-warcritical border-warcritical/70'
+                                    : v.type === 'Skilled'
+                                        ? 'bg-sky-50 text-sky-700 border-sky-300'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-300';
+                            const isSelected =
+                                selectedVolunteer && selectedVolunteer.id === v.id;
+
+                            const Card = (
+                                <button
+                                    key={v.id}
+                                    onClick={() => onVolunteerSelect(v)}
+                                    className={
+                                        'w-full text-left glass-panel border rounded-xl px-3 py-2 text-xs bg-white/90 transition hover:border-waraccent/70 hover:shadow-neon ' +
+                                        (isSelected
+                                            ? 'border-waraccent shadow-neon'
+                                            : 'border-slate-200')
+                                    }
+                                >
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <div className="font-semibold text-slate-900">
+                                            {v.name}
+                                        </div>
+                                        <span
+                                            className={
+                                                'px-1.5 py-0.5 rounded-full border text-[0.6rem] ' +
+                                                badgeColor
+                                            }
+                                        >
+                                            {v.type}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between mb-1 text-[0.7rem] text-slate-500">
+                                        <span>
+                                            {v.coords.lat.toFixed(3)}, {v.coords.lng.toFixed(3)}
+                                        </span>
+                                        <span className="text-slate-700 font-mono">
+                                            {v.distanceKm.toFixed(2)} km
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                        {v.skills.map((s) => (
+                                            <span
+                                                key={s}
+                                                className="px-1.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-[0.6rem] text-orange-700"
+                                            >
+                                                {s}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <BatteryBar percent={v.battery} />
+                                </button>
+                            );
+
+                            if (motion) {
+                                return (
+                                    <motion.div
+                                        key={v.id}
+                                        initial={{ opacity: 0, x: 10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                    >
+                                        {Card}
+                                    </motion.div>
+                                );
+                            }
+                            return Card;
+                        })}
+                    </div>
+                </div>
+            );
+        }
+
+        function EscalationFeed({ events }) {
+            return (
+                <div className="glass-panel border border-orange-100 rounded-xl px-3 py-2 h-full flex flex-col bg-white/90">
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 text-xs text-slate-800">
+                            <ShieldAlert size={14} className="text-warcritical" />
+                            <span>Escalation Feed</span>
+                        </div>
+                        <span className="text-[0.6rem] text-slate-500">Live</span>
+                    </div>
+                    <div className="text-[0.65rem] text-slate-500 mb-1">
+                        SOS alerts • Geofence breaches
+                    </div>
+                    <div className="flex-1 overflow-y-auto scroll-thin space-y-1.5 pr-1 text-xs">
+                        {events.map((e) => (
+                            <div
+                                key={e.id}
+                                className={
+                                    'rounded-lg px-2 py-1.5 border flex items-start justify-between gap-2 ' +
+                                    (e.type === 'SOS'
+                                        ? 'border-warcritical/60 bg-warcritical/5'
+                                        : 'border-amber-300/80 bg-amber-50')
+                                }
+                            >
+                                <div>
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                        <span
+                                            className={
+                                                'text-[0.6rem] px-1 py-0.5 rounded-full uppercase tracking-wide ' +
+                                                (e.type === 'SOS'
+                                                    ? 'bg-warcritical/10 text-warcritical'
+                                                    : 'bg-amber-100 text-amber-700')
+                                            }
+                                        >
+                                            {e.type}
+                                        </span>
+                                        <span className="text-[0.6rem] text-slate-500">
+                                            {e.time}
+                                        </span>
+                                    </div>
+                                    <div className="text-[0.7rem] text-slate-800">
+                                        {e.message}
+                                    </div>
+                                </div>
+                                <div className="text-[0.6rem] text-slate-500 whitespace-nowrap">
+                                    {e.source}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Leaflet-based map (India, free OSM tiles)
+        function MapView({
+            incidents,
+            volunteers,
+            restrictedZones,
+            selectedIncident,
+            onIncidentSelectFromMap,
+            activeSkill,
+            onManualGeofenceAlert,
+            onSkillFilterChange,
+        }) {
+            const mapContainerRef = useRef(null);
+            const mapRef = useRef(null);
+            const volunteerLayerRef = useRef(null);
+            const heatLayerRef = useRef(null);
+            const manualCircleRef = useRef(null);
+
+            const [manualMode, setManualMode] = useState(false);
+            const manualModeRef = useRef(false);
+
+            useEffect(() => {
+                manualModeRef.current = manualMode;
+            }, [manualMode]);
+
+            // Initialize Leaflet map once
+            useEffect(() => {
+                if (!mapContainerRef.current || mapRef.current) return;
+                if (!window.L) return;
+
+                // Center over India
+                const map = L.map(mapContainerRef.current, {
+                    center: [22.9734, 78.6569], // central India
+                    zoom: 5,
+                    zoomControl: false,
+                    attributionControl: false,
+                });
+
+                // Light OSM tiles
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors',
+                    maxZoom: 19,
+                }).addTo(map);
+
+                const volunteerLayer = L.layerGroup().addTo(map);
+                const heatLayer = L.layerGroup().addTo(map);
+                volunteerLayerRef.current = volunteerLayer;
+                heatLayerRef.current = heatLayer;
+
+                // Restricted zones (e.g., around Delhi)
+                L.geoJSON(restrictedZones, {
+                    style: {
+                        color: '#dc2626',
+                        weight: 1.5,
+                        fillColor: '#fecaca',
+                        fillOpacity: 0.45,
+                    },
+                }).addTo(map);
+
+                // Incident markers
+                incidents.forEach((inc) => {
+                    const color =
+                        inc.severity >= 5
+                            ? '#dc2626'
+                            : inc.severity >= 4
+                                ? '#f97316'
+                                : '#22c55e';
+                    const m = L.circleMarker(
+                        [inc.coords.lat, inc.coords.lng],
+                        {
+                            radius: 8,
+                            color,
+                            fillColor: color,
+                            fillOpacity: 0.9,
+                            weight: 1.5,
+                        }
+                    ).addTo(map);
+                    m.on('click', () => onIncidentSelectFromMap(inc));
+                });
+
+                // Manual geofence click handler
+                const clickHandler = (e) => {
+                    if (!manualModeRef.current) return;
+
+                    const centerLatLng = e.latlng;
+                    const center = { lat: centerLatLng.lat, lng: centerLatLng.lng };
+                    const radiusKm = 200; // 200 km manual geofence
+
+                    if (manualCircleRef.current) {
+                        map.removeLayer(manualCircleRef.current);
+                        manualCircleRef.current = null;
+                    }
+
+                    const circle = L.circle([center.lat, center.lng], {
+                        radius: radiusKm * 1000,
+                        color: '#f97316',
+                        fillColor: '#fed7aa',
+                        fillOpacity: 0.35,
+                        weight: 1.5,
+                    }).addTo(map);
+                    manualCircleRef.current = circle;
+
+                    const inside = volunteers.filter((v) => {
+                        const d = haversineDistanceKm(center, v.coords);
+                        return d <= radiusKm;
+                    });
+
+                    onManualGeofenceAlert({
+                        center,
+                        radiusKm,
+                        volunteers: inside,
+                    });
+                };
+
+                map.on('click', clickHandler);
+
+                mapRef.current = map;
+
+                return () => {
+                    map.off('click', clickHandler);
+                    map.remove();
+                    mapRef.current = null;
+                    volunteerLayerRef.current = null;
+                    heatLayerRef.current = null;
+                    manualCircleRef.current = null;
+                };
+            }, []);
+
+            // Update volunteers when positions/filters change
+            useEffect(() => {
+                const map = mapRef.current;
+                const volunteerLayer = volunteerLayerRef.current;
+                const heatLayer = heatLayerRef.current;
+                if (!map || !volunteerLayer || !heatLayer) return;
+
+                volunteerLayer.clearLayers();
+                heatLayer.clearLayers();
+
+                const visible = activeSkill
+                    ? volunteers.filter((v) => v.skills.includes(activeSkill))
+                    : volunteers;
+
+                visible.forEach((v) => {
+                    const color =
+                        v.type === 'Critical'
+                            ? '#dc2626'
+                            : v.type === 'Skilled'
+                                ? '#0ea5e9'
+                                : '#22c55e';
+
+                    L.circleMarker([v.coords.lat, v.coords.lng], {
+                        radius:
+                            v.type === 'Critical'
+                                ? 9
+                                : v.type === 'Skilled'
+                                    ? 7
+                                    : 5,
+                        color,
+                        fillColor: color,
+                        fillOpacity: 0.9,
+                        weight: 1.2,
+                    }).addTo(volunteerLayer);
+
+                    // simple glow
+                    L.circle([v.coords.lat, v.coords.lng], {
+                        radius: 50000,
+                        color: 'transparent',
+                        fillColor: color,
+                        fillOpacity: 0.12,
+                    }).addTo(heatLayer);
+                });
+            }, [volunteers, activeSkill]);
+
+            const toggleManualMode = () => {
+                setManualMode((prev) => !prev);
+            };
+
+            return (
+                <div className="relative h-full w-full rounded-2xl border border-orange-100 glass-panel bg-white/80 overflow-hidden">
+                    <div
+                        ref={mapContainerRef}
+                        className="absolute inset-0"
+                        id="map-container"
+                    />
+                    <div className="absolute top-3 left-3 flex flex-col gap-2">
+                        <div className="glass-panel bg-white/90 border border-orange-100 rounded-xl px-3 py-2 text-xs text-slate-800 shadow-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                                <MapIcon size={14} className="text-waraccent" />
+                                <span className="uppercase tracking-wide text-[0.65rem] text-slate-500">
+                                    Map Layers
+                                </span>
+                            </div>
+                            <ul className="space-y-0.5 text-[0.7rem]">
+                                <li>
+                                    <span className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />
+                                    Resource Heatmap
+                                </li>
+                                <li>
+                                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />
+                                    Volunteer Markers
+                                </li>
+                                <li>
+                                    <span className="inline-block w-2 h-2 rounded-full bg-warcritical mr-1" />
+                                    Restricted Zones
+                                </li>
+                            </ul>
+                        </div>
+                        <button
+                            onClick={toggleManualMode}
+                            className={
+                                'text-xs px-3 py-1.5 rounded-full border shadow-sm glass-panel bg-white/95 ' +
+                                (manualMode
+                                    ? 'border-waraccent bg-waraccent text-white shadow-neon'
+                                    : 'border-slate-300 text-slate-700 hover:border-waraccent/70')
+                            }
+                        >
+                            {manualMode
+                                ? 'Manual Geofence: ON (click map)'
+                                : 'Manual Geofence: OFF'}
+                        </button>
+                    </div>
+                    <div className="absolute bottom-3 left-3 right-3 flex items-end gap-3">
+                        <div className="flex-1">
+                            <SkillFilter
+                                activeSkill={activeSkill}
+                                onChange={onSkillFilterChange}
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [incidents] = useState(INCIDENTS);
+            const [volunteers, setVolunteers] = useState(VOLUNTEERS_INITIAL);
+            const [selectedIncident, setSelectedIncident] = useState(INCIDENTS[0]);
+            const [selectedVolunteer, setSelectedVolunteer] = useState(null);
+            const [activeSkill, setActiveSkill] = useState(null);
+            const [escalationEvents, setEscalationEvents] = useState([
+                {
+                    id: 'E-001',
+                    type: 'SOS',
+                    time: '12:01:14',
+                    message: 'Mayday from NDRF Unit Alpha near Delhi debris field.',
+                    source: 'INC-001',
+                },
+                {
+                    id: 'E-002',
+                    type: 'Geofence Breach',
+                    time: '12:03:27',
+                    message: 'Unauthorized entry into Delhi restricted Zone GF-DELHI-1.',
+                    source: 'Geofence GF-DELHI-1',
+                },
+            ]);
+
+            const activeIncidentsCount = incidents.length;
+            const bootsOnGround = volunteers.length;
+            const pendingVerifications = 7;
+            const [latency, setLatency] = useState(32);
+
+            // Mock realtime updates
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    setVolunteers((prev) =>
+                        prev.map((v) => {
+                            const jitterLat = (Math.random() - 0.5) * 0.05;
+                            const jitterLng = (Math.random() - 0.5) * 0.05;
+                            return {
+                                ...v,
+                                coords: {
+                                    lat: v.coords.lat + jitterLat,
+                                    lng: v.coords.lng + jitterLng,
+                                },
+                                battery: Math.max(5, v.battery - Math.random() * 0.5),
+                            };
+                        })
+                    );
+                    setLatency((prev) =>
+                        Math.max(
+                            18,
+                            Math.min(120, prev + (Math.random() - 0.5) * 8)
+                        )
+                    );
+                }, 6000);
+
+                return () => clearInterval(interval);
+            }, []);
+
+            // Escalation feed generator
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    const types = ['SOS', 'Geofence Breach'];
+                    const type = types[Math.floor(Math.random() * types.length)];
+                    const now = new Date();
+                    const time =
+                        now.getHours().toString().padStart(2, '0') +
+                        ':' +
+                        now.getMinutes().toString().padStart(2, '0') +
+                        ':' +
+                        now.getSeconds().toString().padStart(2, '0');
+                    const randomIncident =
+                        incidents[Math.floor(Math.random() * incidents.length)];
+                    const msg =
+                        type === 'SOS'
+                            ? `Priority SOS near ${randomIncident.title}.`
+                            : `Geofence anomaly around ${randomIncident.id} perimeter.`;
+
+                    setEscalationEvents((prev) => {
+                        const next = [
+                            {
+                                id: 'E-' + (prev.length + 1),
+                                type,
+                                time,
+                                message: msg,
+                                source:
+                                    type === 'SOS'
+                                        ? randomIncident.id
+                                        : 'Auto-GeoEngine',
+                            },
+                            ...prev,
+                        ];
+                        return next.slice(0, 30);
+                    });
+
+                    try {
+                        const ctx =
+                            new (window.AudioContext || window.webkitAudioContext)();
+                        const o = ctx.createOscillator();
+                        const g = ctx.createGain();
+                        o.type = 'sine';
+                        o.frequency.value = type === 'SOS' ? 880 : 660;
+                        g.gain.setValueAtTime(0.001, ctx.currentTime);
+                        g.gain.exponentialRampToValueAtTime(
+                            0.03,
+                            ctx.currentTime + 0.03
+                        );
+                        g.gain.exponentialRampToValueAtTime(
+                            0.0001,
+                            ctx.currentTime + 0.2
+                        );
+                        o.connect(g);
+                        g.connect(ctx.destination);
+                        o.start();
+                        o.stop(ctx.currentTime + 0.22);
+                    } catch (e) {
+                        // ignore audio issues
+                    }
+                }, 15000);
+
+                return () => clearInterval(interval);
+            }, [incidents]);
+
+            const handleManualGeofenceAlert = ({ center, radiusKm, volunteers }) => {
+                const now = new Date();
+                const time =
+                    now.getHours().toString().padStart(2, '0') +
+                    ':' +
+                    now.getMinutes().toString().padStart(2, '0') +
+                    ':' +
+                    now.getSeconds().toString().padStart(2, '0');
+                const count = volunteers.length;
+                setEscalationEvents((prev) => [
+                    {
+                        id: 'E-' + (prev.length + 1),
+                        type: 'Geofence Breach',
+                        time,
+                        message: `Manual geofence alert dispatched to ${count} volunteers within ${radiusKm}km.`,
+                        source: 'Manual GeoFence',
+                    },
+                    ...prev,
+                ]);
+                alert(
+                    `Mock send_alert called for ${count} volunteers within ${radiusKm}km.`
+                );
+            };
+
+            const onIncidentClick = (inc) => {
+                setSelectedIncident(inc);
+            };
+
+            const onVolunteerSelect = (v) => {
+                setSelectedVolunteer(v);
+            };
+
+            const latencyColor =
+                latency > 90
+                    ? 'text-warcritical'
+                    : latency > 60
+                        ? 'text-amber-500'
+                        : 'text-emerald-600';
+
+            return (
+                <div className="h-full w-full flex flex-col bg-warbg text-slate-900 overflow-hidden">
+                    {/* Top Navigation / Metrics Bar */}
+                    <header className="px-5 py-3 border-b border-orange-100 glass-panel bg-white/80">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-white via-orange-100 to-waraccent shadow-neon flex items-center justify-center border border-orange-200">
+                                    <MapIcon size={20} className="text-waraccent" />
+                                </div>
+                                <div>
+                                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                                        Master Command Center
+                                    </div>
+                                    <div className="text-sm text-slate-700">
+                                        India Emergency Response • Live Ops
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 flex justify-center">
+                                <div className="grid grid-cols-4 gap-3 max-w-3xl w-full">
+                                    <MetricCard
+                                        label="Active Incidents"
+                                        value={activeIncidentsCount}
+                                        accentClass="border-warcritical/60 bg-warcritical/5"
+                                        icon={ShieldAlert}
+                                    />
+                                    <MetricCard
+                                        label="Boots on Ground"
+                                        value={bootsOnGround}
+                                        accentClass="border-emerald-400/60 bg-emerald-50"
+                                        icon={Users}
+                                    />
+                                    <MetricCard
+                                        label="Pending Verifications"
+                                        value={pendingVerifications}
+                                        accentClass="border-waraccent/60 bg-orange-50"
+                                        icon={Radio}
+                                    />
+                                    <MetricCard
+                                        label="System Latency (ms)"
+                                        value={
+                                            <span className={'font-mono ' + latencyColor}>
+                                                {Math.round(latency)}
+                                            </span>
+                                        }
+                                        accentClass="border-slate-200 bg-slate-50"
+                                        icon={MapIcon}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>All systems stable</span>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main 3-column layout */}
+                    <main className="flex-1 flex overflow-hidden px-4 py-3 gap-3">
+                        {/* Left Control Panel */}
+                        <section className="w-72 flex-shrink-0 glass-panel border border-orange-100 rounded-2xl px-3 py-3 flex flex-col bg-white/80">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <ShieldAlert size={16} className="text-warcritical" />
+                                    <div>
+                                        <div className="text-xs text-slate-600 uppercase tracking-wide">
+                                            Active Incidents
+                                        </div>
+                                        <div className="text-[0.7rem] text-slate-500">
+                                            Ranked by severity
+                                        </div>
+                                    </div>
+                                </div>
+                                <span className="text-[0.7rem] text-slate-500">
+                                    {incidents.length} total
+                                </span>
+                            </div>
+
+                            <div className="mb-2">
+                                <input
+                                    className="w-full text-xs px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-waraccent/80 focus:ring-1 focus:ring-waraccent/40"
+                                    placeholder="Search incidents..."
+                                />
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto scroll-thin pr-1">
+                                {incidents.map((inc) => (
+                                    <IncidentCard
+                                        key={inc.id}
+                                        incident={inc}
+                                        selected={selectedIncident && selectedIncident.id === inc.id}
+                                        onClick={() => onIncidentClick(inc)}
+                                    />
+                                ))}
+                            </div>
+
+                            <div className="mt-2">
+                                <OfflineCacheStatus />
+                            </div>
+                        </section>
+
+                        {/* Center Map Stage */}
+                        <section className="flex-1 flex flex-col gap-2 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2 text-xs text-slate-700">
+                                    <MapIcon size={16} className="text-waraccent" />
+                                    <span>Operational Map • India Theater View</span>
+                                </div>
+                                <div className="text-[0.7rem] text-slate-500">
+                                    Layers: Heatmap • Volunteers • Geofences
+                                </div>
+                            </div>
+                            <div className="flex-1 min-h-0">
+                                <MapView
+                                    incidents={incidents}
+                                    volunteers={volunteers}
+                                    restrictedZones={RESTRICTED_ZONES}
+                                    selectedIncident={selectedIncident}
+                                    onIncidentSelectFromMap={onIncidentClick}
+                                    activeSkill={activeSkill}
+                                    onManualGeofenceAlert={handleManualGeofenceAlert}
+                                    onSkillFilterChange={setActiveSkill}
+                                />
+                            </div>
+                        </section>
+
+                        {/* Right Intelligence Panel */}
+                        <section className="w-80 flex-shrink-0 flex flex-col gap-2">
+                            <div className="glass-panel border border-orange-100 rounded-2xl px-3 py-3 flex flex-col h-[52%] bg-white/90">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div>
+                                        <div className="text-xs text-slate-600 uppercase tracking-wide">
+                                            Geo-Skill Match Engine
+                                        </div>
+                                        <div className="text-[0.7rem] text-slate-500">
+                                            Optimized pairing of incidents & volunteers
+                                        </div>
+                                    </div>
+                                    <div className="text-right text-[0.6rem] text-slate-500">
+                                        Skill Filter
+                                        <div className="mt-1">
+                                            <select
+                                                value={activeSkill || ''}
+                                                onChange={(e) => setActiveSkill(e.target.value || null)}
+                                                className="bg-white border border-slate-300 text-[0.65rem] px-1.5 py-0.5 rounded-md focus:outline-none focus:border-waraccent/80"
+                                            >
+                                                <option value="">All</option>
+                                                {SKILL_OPTIONS.map((s) => (
+                                                    <option key={s} value={s}>
+                                                        {s}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <GeoSkillMatchPanel
+                                    selectedIncident={selectedIncident}
+                                    volunteers={volunteers}
+                                    activeSkill={activeSkill}
+                                    onVolunteerSelect={onVolunteerSelect}
+                                    selectedVolunteer={selectedVolunteer}
+                                />
+                            </div>
+
+                            <div className="flex-1 flex flex-col gap-2 min-h-0">
+                                <SupplyDemandTicker />
+                                <EscalationFeed events={escalationEvents} />
+                            </div>
+                        </section>
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
