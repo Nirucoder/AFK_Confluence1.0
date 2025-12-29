@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrisisConnect - Resilience Together</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+
+  <!-- ================= NAVBAR ================= -->
+  <header class="navbar">
+    <a href="index.html" class="logo">
+      <img src="assets/logo.png" alt="CrisisConnect Logo">
+      <span class="logo-text">CrisisConnect</span>
+    </a>
+
+    <nav class="nav-links">
+      <a href="index.html" class="active">Home</a>
+      <a href="about.html">About Us</a>
+      <a href="volunteer.html">Volunteer</a>
+      <a href="https://unique-queijadas-2630ad.netlify.app/" target="_blank">CrisisMap</a>
+      <a href="login.html" id="authBtn" class="nav-btn">Login</a>
+    </nav>
+  </header>
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>
+        Connecting Volunteers,<br />
+        Building Resilience.
+      </h1>
+      <p>
+        Join a community dedicated to real-time crisis response. Verify alerts, coordinate resources, and save lives.
+      </p>
+
+      <button class="cta-btn" onclick="goToDashboard()">
+        Find Crisis Near You
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= FEATURES ================= -->
+  <section class="features">
+    <div class="feature-card">
+      <h3>📍 Live Crisis Map</h3>
+      <p>Real-time updates on affected areas and safe zones.</p>
+      <a href="https://unique-queijadas-2630ad.netlify.app/" target="_blank" class="btn-secondary">View Map</a>
+    </div>
+
+    <div class="feature-card">
+      <h3>🛡 Verify</h3>
+      <p>Help verify on-ground situations by uploading real-time photos and reports.</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>📍 Deploy</h3>
+      <p>Coordinate with local teams to ensure assistance reaches the right locations.</p>
+    </div>
+  </section>
+
+  <!-- ================= FEEDBACK SECTION ================= -->
+  <section class="feedback-section" style="padding: 4rem 2rem; background: #fff; text-align: center;">
+    <h2 style="color: var(--primary-color); margin-bottom: 1rem;">We Value Your Feedback</h2>
+    <p style="margin-bottom: 2rem; color: #666;">Help us improve CrisisConnect. Your feedback is anonymous.</p>
+
+    <div style="max-width: 500px; margin: 0 auto; text-align: left;">
+      <textarea id="feedbackText" placeholder="Tyoe your feedback here..."
+        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;"></textarea>
+      <button id="submitFeedback" class="btn-primary" style="width: 100%;">Submit Anonymous Feedback</button>
+      <p id="feedbackMsg" style="margin-top: 10px; text-align: center; font-weight: bold;"></p>
+    </div>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="footer">
+    <p>© 2025 CrisisConnect | Hackathon Project</p>
+    <a href="admin.html" style="color: #444; text-decoration: none; font-size: 0.8rem;">Admin Portal</a>
+  </footer>
+
+  <!-- ================= AUTH LOGIC ================= -->
+  <script type="module">
+    import { auth } from "./js/firebase.js";
+    import {
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    const authBtn = document.getElementById("authBtn");
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        if (authBtn) authBtn.remove();
+
+        const existingMenu = document.querySelector('.user-menu');
+        if (existingMenu) existingMenu.remove();
+
+        const userMenuHTML = `
+           <div class="user-menu">
+            <button class="user-btn">
+               👤 ${user.email.split('@')[0]} ▼
+            </button>
+            <div class="dropdown-content">
+              <a href="dashboard.html">Dashboard</a>
+              <a href="#" onclick="logout()">Logout</a>
+            </div>
+          </div>
+        `;
+        navLinks.insertAdjacentHTML('beforeend', userMenuHTML);
+      } else {
+        const existingMenu = document.querySelector('.user-menu');
+        if (existingMenu) existingMenu.remove();
+
+        const existingBtn = document.getElementById("authBtn");
+        if (!existingBtn) {
+          const navLinks = document.querySelector(".nav-links"); // Re-select to be safe
+          const btn = document.createElement('a');
+          btn.id = "authBtn";
+          btn.className = "nav-btn";
+          btn.innerText = "Login / Sign Up";
+          btn.href = "login.html";
+          navLinks.appendChild(btn);
+        }
+      }
+    });
+
+    window.goToDashboard = function () {
+      window.location.href = "dashboard.html";
+    };
+  </script>
+
+  <!-- Feedback Logic -->
+  <script type="module" src="js/feedback.js"></script>
+</body>
+
+</html>

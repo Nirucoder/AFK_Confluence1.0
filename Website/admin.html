@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Portal - CrisisConnect</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* Simple Admin Styles */
+        body {
+            background: #f0f2f5;
+        }
+
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2c3e50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            text-align: center;
+            width: 300px;
+        }
+
+        .login-box input {
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+        }
+
+        .wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            background: #ddd;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .tab-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        .admin-table th,
+        .admin-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .admin-table th {
+            background: #f8f9fa;
+        }
+
+        .approve-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- LOGIN OVERLAY -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <h2>Admin Login</h2>
+            <input id="admUser" placeholder="Username">
+            <input id="admPass" type="password" placeholder="Password">
+            <button onclick="adminLogin()" class="nav-btn" style="width:100%">Login</button>
+            <p id="loginMsg" style="color:red; margin-top:10px"></p>
+            <a href="index.html" style="display:block; margin-top:20px; font-size:0.8rem">Back to Home</a>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="adminDashboard" class="wrapper" style="display:none">
+        <div class="admin-header">
+            <h1>🛡 Admin Portal</h1>
+            <button onclick="location.href='index.html'" class="nav-btn" style="background:grey">Exit</button>
+        </div>
+
+        <div id="debugInfo" style="margin-bottom:10px; padding:10px; background:#eee; border:1px dashed #999;"></div>
+
+        <div id="debugInfo" style="margin-bottom:10px; padding:10px; background:#eee; border:1px dashed #999;"></div>
+
+        <div class="tabs">
+            <button id="pendingTab" class="tab-btn active" onclick="showPending()">⚠️ Pending Requests</button>
+            <button id="membersTab" class="tab-btn" onclick="showMembers()">👥 All Members</button>
+            <button id="crisisTab" class="tab-btn" onclick="showCrisis()">🔥 Crisis Reports</button>
+            <button id="feedbackTab" class="tab-btn" onclick="showFeedbacks()">💬 Feedbacks</button>
+        </div>
+
+        <div id="sectionPending">
+            <div id="pendingList"></div>
+        </div>
+
+        <div id="sectionMembers" style="display:none">
+            <div id="membersList"></div>
+        </div>
+
+        <div id="sectionCrisis" style="display:none">
+            <h3>Crisis Reports</h3>
+            <div id="crisisList" style="margin-top:20px;"></div>
+        </div>
+
+        <div id="sectionFeedbacks" style="display:none">
+            <h3>Anonymous User Feedback</h3>
+            <div id="feedbackList" style="margin-top:20px;"></div>
+        </div>
+    </div>
+
+    <script type="module" src="js/admin.js"></script>
+</body>
+
+</html>
