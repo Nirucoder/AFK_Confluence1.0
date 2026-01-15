@@ -1,2 +1,3 @@
 # AFK_Confluence1.0
-This Repo presents to you our project in Confluence 1.0 where we present our solution in a particular problem statement.
+Crisis Connect is a modern emergency response coordination platform built with React and Vite. It bridges verified volunteers with real-time field operations through an intuitive web interface. The platform features phone-based volunteer onboarding with three-tier classification, an interactive Leaflet map for live unit tracking, a secure agency command portal with incident metrics and priority feeds, and a comprehensive field protocols library. Built with Tailwind CSS v4, it delivers a premium tactical UI with dark theme aesthetics. The system enables efficient crisis management through geofence visualization, real-time status monitoring, and categorized standard operating procedures for medical, fire, and civil response scenarios.
+
